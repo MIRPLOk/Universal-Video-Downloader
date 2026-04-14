@@ -192,8 +192,8 @@ EXIT_WORDS      = {"выход", "exit", "quit", "q", "stop"}
 
 BANNER = """
 ╔══════════════════════════════════════════════╗
-║       UNIVERSAL VIDEO DOWNLOADER PRO         ║
-║          yt-dlp · by you · v2.1              ║
+║       UNIVERSAL VIDEO DOWNLOADER             ║
+║          yt-dlp · by you                     ║
 ╠══════════════════════════════════════════════╣
 ║  Введите ссылку(и) через запятую или поиск   ║
 ║  Для выхода: выход / exit / q                ║
