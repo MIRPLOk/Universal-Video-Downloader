@@ -95,11 +95,9 @@ def build_ydl_opts(download_path: str, quality: str, audio_only: bool) -> dict:
                 "preferredquality": "192",
             }]
         else:
-            # Без FFmpeg — сразу берём аудио в готовом контейнере
             fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
     else:
         if FFMPEG_AVAILABLE:
-            # FFmpeg есть — можно раздельно скачать видео+аудио и склеить
             quality_map = {
                 "best":  "bestvideo+bestaudio/best",
                 "1080":  "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
@@ -108,7 +106,6 @@ def build_ydl_opts(download_path: str, quality: str, audio_only: bool) -> dict:
                 "worst": "worstvideo+worstaudio/worst",
             }
         else:
-            # FFmpeg нет — только форматы с видео И аудио в одном файле
             quality_map = {
                 "best":  "best[ext=mp4]/best",
                 "1080":  "best[height<=1080][ext=mp4]/best[height<=1080]",
@@ -126,10 +123,9 @@ def build_ydl_opts(download_path: str, quality: str, audio_only: bool) -> dict:
         "no_warnings":        True,
         "ignoreerrors":       True,
         "postprocessors":     postprocessors,
-        "progress_hooks":     [],  # заполняется в download_item
+        "progress_hooks":     [],
     }
 
-    # Если FFmpeg есть — объединяем в mp4
     if FFMPEG_AVAILABLE and not audio_only:
         opts["merge_output_format"] = "mp4"
 
@@ -159,7 +155,6 @@ def download_item(
         print(f"  🚀 Загрузка: {input_data}")
         logger.info("Download URL: %s", input_data)
 
-    # Прогресс-бар в терминале
     def _progress(d):
         if d["status"] == "downloading":
             pct  = d.get("_percent_str", "?").strip()
@@ -200,6 +195,17 @@ BANNER = """
 ╚══════════════════════════════════════════════╝
 """
 
+HELP_TEXT = (
+    "  Команды:\n"
+    "    :quality <best|1080|720|480|worst>  — сменить качество\n"
+    "    :audio                              — переключить режим аудио\n"
+    "    :ffmpeg                             — статус FFmpeg\n"
+    "    :path [<папка>]                     — показать / сменить папку загрузки\n"
+    "    :stats                              — счётчик сессии\n"
+    "    :help                               — эта справка\n"
+    "    выход / exit / q                    — завершить\n"
+)
+
 
 def run_interactive(download_path: str, quality: str, audio_only: bool, logger: logging.Logger):
     print(BANNER)
@@ -210,6 +216,8 @@ def run_interactive(download_path: str, quality: str, audio_only: bool, logger: 
     if not FFMPEG_AVAILABLE:
         print("     → Установите FFmpeg для максимального качества: https://ffmpeg.org/download.html")
     print()
+
+    print("  💡 Введите :help для списка команд\n")
 
     session_ok   = 0
     session_fail = 0
@@ -247,8 +255,23 @@ def run_interactive(download_path: str, quality: str, audio_only: bool, logger: 
                 print(f"  🔧 FFmpeg: {status}")
                 continue
 
+            # [ИЗМЕНЕНИЕ 2] :path теперь умеет и показывать, и менять папку
             if raw == ":path":
-                print(f"  📁 {os.path.abspath(download_path)}")
+                print(f"  📁 Текущая папка: {os.path.abspath(download_path)}")
+                continue
+
+            if raw.startswith(":path "):
+                new_path = sanitize_input(raw[len(":path "):])
+                if not new_path:
+                    print("  ⚠️  Укажите путь: :path <папка>")
+                    continue
+                try:
+                    os.makedirs(new_path, exist_ok=True)
+                    download_path = new_path
+                    print(f"  ✅ Папка изменена: {os.path.abspath(download_path)}")
+                    logger.info("Download path changed to: %s", os.path.abspath(download_path))
+                except OSError as e:
+                    print(f"  ❌ Не удалось создать папку: {e}")
                 continue
 
             if raw == ":stats":
@@ -256,16 +279,7 @@ def run_interactive(download_path: str, quality: str, audio_only: bool, logger: 
                 continue
 
             if raw == ":help":
-                print(
-                    "  Команды:\n"
-                    "    :quality <best|1080|720|480|worst>  — сменить качество\n"
-                    "    :audio                              — переключить режим аудио\n"
-                    "    :ffmpeg                             — статус FFmpeg\n"
-                    "    :path                               — показать папку загрузки\n"
-                    "    :stats                              — счётчик сессии\n"
-                    "    :help                               — эта справка\n"
-                    "    выход / exit / q                    — завершить\n"
-                )
+                print(HELP_TEXT)
                 continue
 
             items = parse_items(raw)
@@ -334,7 +348,6 @@ def main():
     logger = setup_logger(args.log_dir)
     os.makedirs(args.output, exist_ok=True)
 
-    # Пакетный режим: ссылки переданы сразу через CLI
     if args.urls:
         items = []
         for u in args.urls:
@@ -351,7 +364,6 @@ def main():
         print(f"\n✅ {ok}  ❌ {fail}")
         sys.exit(0 if fail == 0 else 1)
 
-    # Интерактивный режим
     run_interactive(args.output, args.quality, args.audio, logger)
     input("\nНажмите Enter для выхода...")
 
